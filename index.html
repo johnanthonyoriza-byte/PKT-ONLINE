@@ -1,0 +1,737 @@
+<!-- POKEMON TRETTA ONLINE — test build -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Tretta Scanner</title>
+<style>
+/* Layout: scanner device on top, gallery of unlocked chips, then a team battle setup (1-3 Pokémon per side) and battle log. Sky blue theme. */
+:root{
+  --bg:#d6efff; --sky-top:#9fd8fa; --cloud:rgba(255,255,255,.65);
+  --panel:#f6fbff; --panel-raised:#e3f3ff; --line:#b2d9f2;
+  --fg:#0c2a40; --fg-dim:#4a6f88;
+  --accent:#0877c4; --accent-dim:#cbe9fc; --on-accent:#ffffff;
+  --team-a:#2eaef0; --team-b:#ff9a4d; --on-team:#06263b;
+  --good:#1f8f52; --bad:#d63f50;
+  --font-display:'Chakra Petch',"Space Grotesk",system-ui,sans-serif;
+  --font-body:'IBM Plex Sans',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#07182a; --sky-top:#0f3b61; --cloud:rgba(120,200,255,.08);
+    --panel:#0e2740; --panel-raised:#143555; --line:#24506f;
+    --fg:#e8f6ff; --fg-dim:#8fb7d1;
+    --accent:#5cc8ff; --accent-dim:#164a6c; --on-accent:#04243a;
+    --team-a:#38b6f5; --team-b:#ffa45c; --on-team:#06263b;
+    --good:#4fd98a; --bad:#ff7a86; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#07182a; --sky-top:#0f3b61; --cloud:rgba(120,200,255,.08);
+  --panel:#0e2740; --panel-raised:#143555; --line:#24506f;
+  --fg:#e8f6ff; --fg-dim:#8fb7d1;
+  --accent:#5cc8ff; --accent-dim:#164a6c; --on-accent:#04243a;
+  --team-a:#38b6f5; --team-b:#ffa45c; --on-team:#06263b;
+  --good:#4fd98a; --bad:#ff7a86; color-scheme:dark;
+}
+*{box-sizing:border-box;}
+body{
+  background-color:var(--bg);
+  background-image:
+    radial-gradient(ellipse 320px 80px at 10% 90px,var(--cloud),transparent 70%),
+    radial-gradient(ellipse 420px 100px at 90% 170px,var(--cloud),transparent 70%),
+    linear-gradient(180deg,var(--sky-top),var(--bg) 460px);
+  background-repeat:no-repeat;
+  color:var(--fg);
+  font-family:var(--font-body);
+  padding-left:max(16px, env(safe-area-inset-left,0px));
+  padding-right:max(16px, env(safe-area-inset-right,0px));
+  padding-block:24px;
+}
+.wrap{max-width:980px;margin:0 auto;}
+h1,h2,h3{font-family:var(--font-display);text-wrap:balance;margin:0;}
+.eyebrow{
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent);margin:0 0 6px;
+}
+.title-row{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
+.title-row h1{font-size:28px;letter-spacing:.01em;}
+.sub{color:var(--fg-dim);font-size:14px;margin:0 0 28px;max-width:62ch;}
+
+.scanner{
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:18px;margin-bottom:22px;
+}
+.scan-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.scan-row input{
+  flex:1 1 220px;min-width:0;
+  background:var(--panel-raised);border:1px solid var(--line);border-radius:6px;
+  color:var(--fg);font-family:var(--font-mono);font-size:14px;padding:10px 12px;
+}
+.scan-row input::placeholder{color:var(--fg-dim);}
+button{
+  font-family:var(--font-display);font-size:13px;letter-spacing:.03em;
+  border-radius:6px;border:1px solid var(--line);background:var(--panel-raised);
+  color:var(--fg);padding:10px 16px;cursor:pointer;
+}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600;}
+button:disabled{opacity:.45;cursor:not-allowed;}
+.codes-hint{font-family:var(--font-mono);font-size:11.5px;color:var(--fg-dim);margin-top:10px;line-height:1.6;}
+.err{color:var(--bad);font-family:var(--font-mono);font-size:12.5px;margin-top:10px;min-height:1em;}
+
+.roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-bottom:26px;}
+.mon-card{
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;
+}
+.mon-head{
+  display:flex;align-items:center;gap:12px;padding:14px 14px 10px;
+}
+.sprite-box{
+  width:72px;height:72px;flex:none;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.sprite-badge{
+  width:100%;height:100%;display:flex;align-items:center;justify-content:center;position:relative;
+  animation:idlebob 1.3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion:reduce){ .sprite-badge{animation:none;} }
+@keyframes idlebob{
+  0%,100%{transform:translateY(0) scale(1);}
+  50%{transform:translateY(-4px) scale(1.03);}
+}
+.sprite-badge .glyph{
+  font-family:var(--font-display);font-weight:700;font-size:26px;color:rgba(255,255,255,.92);
+  text-shadow:0 1px 3px rgba(0,0,0,.35);
+}
+.sprite-badge .scan-sweep{
+  position:absolute;inset:0;
+  background:linear-gradient(180deg, transparent 0%, rgba(255,255,255,.28) 48%, transparent 100%);
+  transform:translateY(-100%);
+  animation:sweep 2.6s linear infinite;
+}
+@media (prefers-reduced-motion:reduce){ .sprite-badge .scan-sweep{animation:none;display:none;} }
+@keyframes sweep{
+  0%{transform:translateY(-100%);}
+  100%{transform:translateY(100%);}
+}
+.mon-name-wrap{min-width:0;}
+.mon-name{font-family:var(--font-display);font-size:16px;}
+.mon-meta{font-family:var(--font-mono);font-size:11px;color:var(--fg-dim);margin-top:2px;}
+.tier-chip{
+  display:inline-block;font-family:var(--font-mono);font-size:11px;font-weight:600;
+  padding:1px 7px;border-radius:4px;margin-left:6px;
+  background:var(--accent-dim);color:var(--accent);
+}
+.type-chip{
+  display:inline-block;font-size:10.5px;font-family:var(--font-mono);letter-spacing:.04em;
+  padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--fg-dim);
+  text-transform:uppercase;margin-right:4px;
+}
+.tabs{display:flex;border-top:1px solid var(--line);}
+.tab-btn{
+  flex:1;background:none;border:none;border-radius:0;font-family:var(--font-mono);
+  font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--fg-dim);
+  padding:9px 4px;border-right:1px solid var(--line);
+}
+.tab-btn:last-child{border-right:none;}
+.tab-btn.active{color:var(--accent);background:var(--panel-raised);}
+.tab-panel{padding:12px 14px 16px;font-size:13px;}
+.stat-row{display:grid;grid-template-columns:40px 1fr 36px;gap:8px;align-items:center;margin-bottom:5px;font-family:var(--font-mono);font-size:11px;}
+.stat-bar-track{height:6px;background:var(--panel-raised);border-radius:3px;overflow:hidden;}
+.stat-bar-fill{height:100%;background:var(--accent);}
+.move-row{display:flex;flex-direction:column;gap:2px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px;}
+.move-row:last-child{border-bottom:none;}
+.move-name{font-weight:600;}
+.move-tag{font-family:var(--font-mono);font-size:10px;color:var(--fg-dim);letter-spacing:.02em;}
+.info-line{font-family:var(--font-mono);font-size:12px;line-height:1.9;}
+.info-line b{color:var(--fg-dim);font-weight:500;}
+.remove-btn{
+  margin-left:auto;background:none;border:none;color:var(--fg-dim);font-size:16px;line-height:1;
+  padding:4px 8px;cursor:pointer;
+}
+
+.battle-setup{
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:22px;
+}
+.vs-row{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:center;}
+.team{display:grid;gap:10px;min-width:0;}
+.team h3{font-size:15px;color:var(--accent);}
+.picker{min-width:0;}
+.picker label{display:block;font-family:var(--font-mono);font-size:11px;color:var(--fg-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;}
+.picker select{
+  width:100%;background:var(--panel-raised);border:1px solid var(--line);border-radius:6px;
+  color:var(--fg);font-family:var(--font-body);font-size:14px;padding:10px 12px;
+}
+.vs-mark{font-family:var(--font-display);font-size:20px;color:var(--accent);text-align:center;}
+.battle-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:16px;}
+.battle-note{font-family:var(--font-mono);font-size:12px;color:var(--fg-dim);}
+@media (max-width:640px){ .vs-row{grid-template-columns:1fr;} }
+
+.result{
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;
+}
+.odds-row{display:flex;gap:10px;align-items:center;margin-bottom:14px;}
+.odds-bar{flex:1;height:22px;border-radius:999px;overflow:hidden;display:flex;background:var(--panel-raised);border:1px solid var(--line);}
+.odds-seg{display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;font-weight:600;color:var(--on-team);}
+.odds-seg.left{background:var(--team-a);}
+.odds-seg.right{background:var(--team-b);}
+.winner-line{font-family:var(--font-display);font-size:17px;margin-bottom:10px;}
+.log{
+  font-family:var(--font-mono);font-size:12.5px;line-height:1.7;
+  background:var(--panel-raised);border:1px solid var(--line);border-radius:8px;
+  padding:12px 14px;max-height:280px;overflow-y:auto;
+}
+.log .turn-label{color:var(--accent);}
+.log .faint{color:var(--bad);font-weight:600;}
+.odds-label{font-family:var(--font-mono);font-size:11px;color:var(--fg-dim);flex:0 1 110px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.odds-label.right{text-align:right;}
+.lineups{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;font-size:13px;}
+@media (max-width:640px){ .lineups{grid-template-columns:1fr;} }
+.side-0{border-left:3px solid var(--team-a);padding-left:8px;}
+.side-1{border-left:3px solid var(--team-b);padding-left:8px;}
+.log .send{color:var(--fg-dim);}
+.survivors{color:var(--fg-dim);font-size:14px;}
+.scanner,.mon-card,.battle-setup,.result{box-shadow:0 8px 22px -14px rgba(8,100,170,.45);}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.empty-state{color:var(--fg-dim);font-size:13px;padding:30px 10px;text-align:center;}
+footer{margin-top:30px;color:var(--fg-dim);font-size:11.5px;font-family:var(--font-mono);text-align:center;}
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap">
+
+<div class="wrap">
+  <p class="eyebrow">Tretta Chip Reader</p>
+  <div class="title-row"><h1>Pokémon Tretta Online</h1></div>
+  <p class="sub">The gallery starts empty every time you load the site. Enter a chip’s Pokecode (e.g. <b>Z2-02</b>) to unlock it. Chips can only be claimed by code. Then inspect them, or send 1 to 3 Pokémon per side into a simulated battle.</p>
+
+  <div class="scanner">
+    <div class="scan-row">
+      <input id="scanInput" type="text" placeholder="Enter Pokecode (e.g. Z2-02)" aria-label="Pokecode" />
+      <button class="primary" id="scanBtn">Scan chip</button>
+    </div>
+    <div class="codes-hint">46 chips in the dex. Type the Pokecode exactly as printed on the chip, like Z2-02.</div>
+    <div class="err" id="scanErr"></div>
+  </div>
+
+  <div class="roster" id="roster"></div>
+
+  <h2 style="font-size:18px;margin-bottom:12px;">Simulated Battle</h2>
+  <div class="battle-setup">
+    <div class="vs-row">
+      <div class="team">
+        <h3>Team 1</h3>
+        <div class="picker"><label for="t1s1">Pokémon 1</label><select id="t1s1"></select></div>
+        <div class="picker"><label for="t1s2">Pokémon 2 (optional)</label><select id="t1s2"></select></div>
+        <div class="picker"><label for="t1s3">Pokémon 3 (optional)</label><select id="t1s3"></select></div>
+      </div>
+      <div class="vs-mark">VS</div>
+      <div class="team">
+        <h3>Team 2</h3>
+        <div class="picker"><label for="t2s1">Pokémon 1</label><select id="t2s1"></select></div>
+        <div class="picker"><label for="t2s2">Pokémon 2 (optional)</label><select id="t2s2"></select></div>
+        <div class="picker"><label for="t2s3">Pokémon 3 (optional)</label><select id="t2s3"></select></div>
+      </div>
+    </div>
+    <div class="battle-actions">
+      <button class="primary" id="fightBtn">Run battle</button>
+      <span class="battle-note" id="battleNote"></span>
+    </div>
+  </div>
+
+  <h2 style="font-size:18px;margin:0 0 12px;">Challenge a player</h2>
+  <div class="battle-setup">
+    <p class="sub" style="margin:0 0 14px;">Playing in person? Build your team in Team 1 above, make a code, and swap codes with the other player. Both phones run the same battle and show the same result. No account needed.</p>
+    <div class="scan-row">
+      <input id="chMine" type="text" readonly placeholder="Your challenge code" aria-label="Your challenge code" />
+      <button class="primary" id="chMakeBtn">Make my code</button>
+      <button id="chCopyBtn">Copy</button>
+    </div>
+    <div class="scan-row" style="margin-top:10px;">
+      <input id="chOpp" type="text" placeholder="Type or paste your opponent’s code" aria-label="Opponent’s code" />
+      <button class="primary" id="chGoBtn">Fight</button>
+    </div>
+    <div class="err" id="chErr"></div>
+  </div>
+
+  <div class="result" id="result">
+    <div class="empty-state">Unlock at least two chips, then set up a battle with 1 to 3 Pokémon per side to see simulated odds and a turn-by-turn log.</div>
+  </div>
+
+  <footer>POKÉMON TRETTA ONLINE · fan-made · 46-chip dex · outcomes are simulated and not official</footer>
+</div>
+
+<script>
+(function(){
+
+// ---------- type chart (attacker type -> defender type multiplier) ----------
+var CHART = {
+ normal:{rock:.5,ghost:0,steel:.5},
+ fire:{fire:.5,water:.5,grass:2,ice:2,bug:2,rock:.5,dragon:.5,steel:2},
+ water:{fire:2,water:.5,grass:.5,ground:2,rock:2,dragon:.5},
+ electric:{water:2,electric:.5,grass:.5,ground:0,flying:2,dragon:.5},
+ grass:{fire:.5,water:2,grass:.5,poison:.5,ground:2,flying:.5,bug:.5,rock:2,dragon:.5,steel:.5},
+ ice:{fire:.5,water:.5,grass:2,ice:.5,ground:2,flying:2,dragon:2,steel:.5},
+ fighting:{normal:2,ice:2,poison:.5,flying:.5,psychic:.5,bug:.5,rock:2,ghost:0,dark:2,steel:2,fairy:.5},
+ poison:{grass:2,poison:.5,ground:.5,rock:.5,ghost:.5,steel:0,fairy:2},
+ ground:{fire:2,electric:2,grass:.5,poison:2,flying:0,bug:.5,rock:2,steel:2},
+ flying:{electric:.5,grass:2,fighting:2,bug:2,rock:.5,steel:.5},
+ psychic:{fighting:2,poison:2,psychic:.5,dark:0,steel:.5},
+ bug:{fire:.5,grass:2,fighting:.5,poison:.5,flying:.5,psychic:2,ghost:.5,dark:2,steel:.5,fairy:.5},
+ rock:{fire:2,ice:2,fighting:.5,ground:.5,flying:2,bug:2,steel:.5},
+ ghost:{normal:0,psychic:2,ghost:2,dark:.5},
+ dragon:{dragon:2,steel:.5,fairy:0},
+ dark:{fighting:.5,psychic:2,ghost:2,dark:.5,fairy:.5},
+ steel:{fire:.5,water:.5,electric:.5,ice:2,rock:2,steel:.5,fairy:2},
+ fairy:{fire:.5,fighting:2,poison:.5,dragon:2,dark:2,steel:.5}
+};
+function typeMult(moveType, defTypes){
+  var m = 1;
+  for (var i=0;i<defTypes.length;i++){
+    var row = CHART[moveType];
+    var v = row && (defTypes[i] in row) ? row[defTypes[i]] : 1;
+    m *= v;
+  }
+  return m;
+}
+var TYPE_COLORS = {
+  normal:"#A8A878", fire:"#F08030", water:"#6890F0", electric:"#F8D030", grass:"#78C850",
+  ice:"#98D8D8", fighting:"#C03028", poison:"#A040A0", ground:"#E0C068", flying:"#A890F0",
+  psychic:"#F85888", bug:"#A8B820", rock:"#B8A038", ghost:"#705898", dragon:"#7038F8",
+  dark:"#705848", steel:"#B8B8D0", fairy:"#EE99AC"
+};
+
+// ---------- roster data (from Tretta Z2 chip set) ----------
+// stats are the chip's own Energy/HP, SPD, ATK, DEF values — no formula applied.
+// moveset names are exactly as printed on the chip; the chips don't list a type/power
+// per move, so in battle each move's type rotates through the chip's own typing (see takeTurn()).
+var DEX = {
+  zygarde_complete:{ name:"Zygarde Complete Form", code:"Z2-XX", rarity:{stars:5,label:"Ultimate"}, hp:550, atk:190, def:228, spd:195, types:["ground","dragon"], moves:["Land’s Wrath"] },
+  white_kyurem:{ name:"White Kyurem", code:"Z2-00", rarity:{stars:4,label:"Legend"}, hp:353, atk:270, def:190, spd:186, types:["dragon","ice"], moves:["Ice Burn","Blizzard","Dragon Pulse"] },
+  black_kyurem:{ name:"Black Kyurem", code:"Z2-01", rarity:{stars:4,label:"Legend"}, hp:353, atk:270, def:190, spd:186, types:["dragon","ice"], moves:["Freeze Shock","Blizzard","Dragon Pulse"] },
+  terrakion:{ name:"Terrakion", code:"Z2-03", rarity:{stars:4,label:"Legend"}, hp:277, atk:208, def:150, spd:187, types:["rock","fighting"], moves:["Stone Edge","Rock Slide"] },
+  cobalion:{ name:"Cobalion", code:"Z2-02", rarity:{stars:4,label:"Legend"}, hp:277, atk:150, def:208, spd:187, types:["steel","fighting"], moves:["Metal Burst","Iron Head"] },
+  jirachi:{ name:"Jirachi", code:"Z2-05", rarity:{stars:4,label:"Legend"}, hp:287, atk:186, def:190, spd:182, types:["steel","psychic"], moves:["Doom Desire"] },
+  virizion:{ name:"Virizion", code:"Z2-04", rarity:{stars:4,label:"Legend"}, hp:277, atk:150, def:208, spd:187, types:["grass","fighting"], moves:["Leaf Blade","Giga Drain"] },
+  zygarde_10:{ name:"Zygarde (10% Forme)", code:"Z2-07", rarity:{stars:4,label:"Legend"}, hp:230, atk:181, def:158, spd:216, types:["dragon","ground"], moves:["Land’s Wrath"] },
+  ash_greninja:{ name:"Ash-Greninja", code:"Z2-06", rarity:{stars:4,label:"Legend"}, hp:249, atk:240, def:158, spd:231, types:["water","dark"], moves:["Water Shuriken"] },
+  kangaskhan_3:{ name:"Kangaskhan", code:"Z2-09", rarity:{stars:3,label:"Tier 3"}, hp:263, atk:144, def:139, spd:160, types:["normal"], moves:["Mega Punch","Double-Edge"] },
+  sylveon:{ name:"Sylveon", code:"Z2-08", rarity:{stars:4,label:"Legend"}, hp:281, atk:193, def:205, spd:129, types:["fairy"], moves:["Fairy Wind"] },
+  serperior:{ name:"Serperior", code:"Z2-11", rarity:{stars:3,label:"Tier 3"}, hp:224, atk:130, def:163, spd:188, types:["grass"], moves:["Frenzy Plant","Iron Tail"] },
+  haxorus:{ name:"Haxorus", code:"Z2-10", rarity:{stars:3,label:"Tier 3"}, hp:225, atk:211, def:153, spd:170, types:["dragon"], moves:["Guillotine","Dragon Pulse"] },
+  samurott:{ name:"Samurott", code:"Z2-13", rarity:{stars:3,label:"Tier 3"}, hp:259, atk:161, def:144, spd:157, types:["water"], moves:["Hydro Cannon","Ice Beam"] },
+  emboar:{ name:"Emboar", code:"Z2-12", rarity:{stars:3,label:"Tier 3"}, hp:270, atk:188, def:119, spd:119, types:["fire","fighting"], moves:["Blast Burn","Brick Break"] },
+  salamence:{ name:"Salamence", code:"Z2-15", rarity:{stars:3,label:"Tier 3"}, hp:257, atk:208, def:141, spd:175, types:["dragon","flying"], moves:["Dragon Rush","Aerial Ace"] },
+  goodra:{ name:"Goodra", code:"Z2-14", rarity:{stars:3,label:"Tier 3"}, hp:249, atk:167, def:216, spd:141, types:["dragon"], moves:["Dragon Pulse","Aqua Tail"] },
+  sharpedo:{ name:"Sharpedo", code:"Z2-17", rarity:{stars:3,label:"Tier 3"}, hp:219, atk:196, def:93, spd:170, types:["water","dark"], moves:["Waterfall","Crunch"] },
+  metagross:{ name:"Metagross", code:"Z2-16", rarity:{stars:3,label:"Tier 3"}, hp:232, atk:202, def:204, spd:124, types:["steel","psychic"], moves:["Meteor Mash","Brick Break"] },
+  kangaskhan_2:{ name:"Kangaskhan", code:"Z2-19", rarity:{stars:2,label:"Tier 2"}, hp:223, atk:127, def:120, spd:135, types:["normal"], moves:["Mega Punch"] },
+  mawile:{ name:"Mawile", code:"Z2-18", rarity:{stars:3,label:"Tier 3"}, hp:193, atk:139, def:144, spd:103, types:["steel","fairy"], moves:["Play Rough","Feint Attack"] },
+  braviary:{ name:"Braviary", code:"Z2-21", rarity:{stars:2,label:"Tier 2"}, hp:219, atk:153, def:113, spd:120, types:["normal","flying"], moves:["Aerial Ace","Crush Claw"] },
+  crustle:{ name:"Crustle", code:"Z2-20", rarity:{stars:2,label:"Tier 2"}, hp:194, atk:129, def:171, spd:70, types:["bug","rock"], moves:["Rock Wrecker"] },
+  escavalier:{ name:"Escavalier", code:"Z2-23", rarity:{stars:2,label:"Tier 2"}, hp:194, atk:187, def:161, spd:58, types:["bug","steel"], moves:["X-Scissor","Iron Head"] },
+  excadrill:{ name:"Excadrill", code:"Z2-22", rarity:{stars:2,label:"Tier 2"}, hp:227, atk:183, def:88, spd:132, types:["ground","steel"], moves:["Fissure"] },
+  snorlax:{ name:"Snorlax", code:"Z2-25", rarity:{stars:2,label:"Tier 2"}, hp:276, atk:143, def:162, spd:66, types:["normal"], moves:["Body Slam"] },
+  golurk:{ name:"Golurk", code:"Z2-24", rarity:{stars:2,label:"Tier 2"}, hp:204, atk:164, def:120, spd:96, types:["ground","ghost"], moves:["Shadow Punch"] },
+  snivy:{ name:"Snivy", code:"Z2-27", rarity:{stars:2,label:"Tier 2"}, hp:156, atk:68, def:85, spd:98, types:["grass"], moves:["Leaf Tornado","Vine Whip"] },
+  aegislash:{ name:"Aegislash", code:"Z2-26", rarity:{stars:2,label:"Tier 2"}, hp:180, atk:78, def:223, spd:89, types:["steel","ghost"], moves:["Iron Head"] },
+  oshawott:{ name:"Oshawott", code:"Z2-29", rarity:{stars:2,label:"Tier 2"}, hp:172, atk:84, def:70, spd:70, types:["water"], moves:["Razor Shell","Water Gun"] },
+  tepig:{ name:"Tepig", code:"Z2-28", rarity:{stars:2,label:"Tier 2"}, hp:182, atk:90, def:70, spd:70, types:["fire"], moves:["Flame Charge","Ember"] },
+  munna:{ name:"Munna", code:"Z2-32", rarity:{stars:1,label:"Tier 1"}, hp:179, atk:43, def:73, spd:36, types:["psychic"], moves:["Psybeam"] },
+  pancham:{ name:"Pancham", code:"Z2-31", rarity:{stars:1,label:"Tier 1"}, hp:164, atk:89, def:84, spd:62, types:["fighting"], moves:["Arm Thrust"] },
+  pichu:{ name:"Pichu", code:"Z2-34", rarity:{stars:1,label:"Tier 1"}, hp:102, atk:57, def:45, spd:89, types:["electric"], moves:["Thunder Shock"] },
+  scraggy:{ name:"Scraggy", code:"Z2-33", rarity:{stars:1,label:"Tier 1"}, hp:148, atk:88, def:91, spd:67, types:["dark","fighting"], moves:["Feint Attack"] },
+  tyrunt:{ name:"Tyrunt", code:"Z2-36", rarity:{stars:1,label:"Tier 1"}, hp:156, atk:105, def:94, spd:67, types:["rock","dragon"], moves:["Horn Drill"] },
+  helioptile:{ name:"Helioptile", code:"Z2-35", rarity:{stars:1,label:"Tier 1"}, hp:134, atk:76, def:52, spd:98, types:["electric","normal"], moves:["Parabolic Charge"] },
+  poliwag:{ name:"Poliwag", code:"Z2-38", rarity:{stars:1,label:"Tier 1"}, hp:161, atk:64, def:50, spd:122, types:["water"], moves:["Bubble Beam"] },
+  sudowoodo:{ name:"Sudowoodo", code:"Z2-37", rarity:{stars:1,label:"Tier 1"}, hp:167, atk:111, def:137, spd:44, types:["rock"], moves:["Rock Throw"] },
+  zangoose:{ name:"Zangoose", code:"Z2-40", rarity:{stars:1,label:"Tier 1"}, hp:172, atk:140, def:83, spd:120, types:["normal"], moves:["Revenge"] },
+  chatot:{ name:"Chatot", code:"Z2-39", rarity:{stars:1,label:"Tier 1"}, hp:178, atk:108, def:62, spd:124, types:["normal","flying"], moves:["Chatter"] },
+  nincada:{ name:"Nincada", code:"Z2-42", rarity:{stars:1,label:"Tier 1"}, hp:117, atk:63, def:105, spd:57, types:["bug","ground"], moves:["Struggle Bug"] },
+  seviper:{ name:"Seviper", code:"Z2-41", rarity:{stars:1,label:"Tier 1"}, hp:177, atk:129, def:80, spd:85, types:["poison"], moves:["Poison Tail"] },
+  klink:{ name:"Klink", code:"Z2-44", rarity:{stars:1,label:"Tier 1"}, hp:128, atk:74, def:92, spd:44, types:["steel"], moves:["Gear Grind"] },
+  growlithe:{ name:"Growlithe", code:"Z2-43", rarity:{stars:1,label:"Tier 1"}, hp:153, atk:88, def:57, spd:90, types:["fire"], moves:["Ember"] },
+  snorunt:{ name:"Snorunt", code:"Z2-45", rarity:{stars:1,label:"Tier 1"}, hp:142, atk:70, def:70, spd:71, types:["ice"], moves:["Ice Shard"] }
+};
+
+// code -> key index (chips can only be claimed by Pokecode, never by name)
+var CODE_INDEX = {};
+Object.keys(DEX).forEach(function(key){
+  var c = DEX[key].code.toUpperCase();
+  (CODE_INDEX[c] = CODE_INDEX[c] || []).push(key);
+});
+
+// ---------- state ----------
+var roster = []; // array of DEX keys, unlocked this session only (resets on reload)
+
+// ---------- scan handler ----------
+var scanInput = document.getElementById('scanInput');
+var scanBtn = document.getElementById('scanBtn');
+var scanErr = document.getElementById('scanErr');
+function doScan(){
+  var raw = scanInput.value.trim();
+  if (!raw) return;
+  var upper = raw.toUpperCase().replace(/\s+/g,'');
+  if (/^Z2(\d\d|XX)$/.test(upper)) upper = 'Z2-' + upper.slice(2);
+  if (upper === 'TSUNDERESUPREME'){
+    Object.keys(DEX).forEach(function(k){ if (roster.indexOf(k)===-1) roster.push(k); });
+    scanErr.style.color = 'var(--good)';
+    scanErr.textContent = 'Secret code accepted. All '+roster.length+' chips unlocked.';
+    scanInput.value = '';
+    renderRoster();
+    renderPickers(true);
+    return;
+  }
+  scanErr.style.color = '';
+  var matches = CODE_INDEX[upper] || [];
+
+  if (matches.length !== 1){
+    scanErr.textContent = 'Chip not recognized: "'+raw+'". Enter a Pokecode like Z2-02. Chips can’t be claimed by name.';
+    return;
+  }
+  if (roster.indexOf(matches[0]) !== -1){
+    scanErr.textContent = DEX[matches[0]].name+' is already in your gallery.';
+    scanInput.value = '';
+    return;
+  }
+  scanErr.textContent = '';
+  addToRoster(matches[0]);
+  scanInput.value = '';
+}
+scanBtn.addEventListener('click', doScan);
+scanInput.addEventListener('keydown', function(e){ if (e.key==="Enter") doScan(); });
+
+function addToRoster(key){
+  if (roster.indexOf(key) === -1) roster.push(key);
+  renderRoster();
+  renderPickers(true);
+}
+function removeFromRoster(key){
+  roster = roster.filter(function(k){ return k!==key; });
+  renderRoster();
+  renderPickers(true);
+}
+
+// ---------- roster rendering ----------
+var rosterEl = document.getElementById('roster');
+var activeTab = {}; // key -> tab name
+function renderRoster(){
+  rosterEl.innerHTML = "";
+  roster.forEach(function(key){
+    var mon = DEX[key];
+    var tab = activeTab[key] || "info";
+
+    var card = document.createElement('div');
+    card.className = "mon-card";
+
+    var head = document.createElement('div');
+    head.className = "mon-head";
+    var c1 = TYPE_COLORS[mon.types[0]] || "#888";
+    var c2 = TYPE_COLORS[mon.types[1] || mon.types[0]] || c1;
+    var grad = 'linear-gradient(145deg, '+c1+', '+c2+')';
+    head.innerHTML =
+      '<div class="sprite-box" style="background:'+grad+';" title="'+mon.name+'">'+
+        '<div class="sprite-badge"><span class="glyph">'+mon.name.charAt(0)+'</span><span class="scan-sweep"></span></div>'+
+      '</div>'+
+      '<div class="mon-name-wrap">'+
+        '<div class="mon-name">'+mon.name+'<span class="tier-chip" title="'+mon.rarity.label+'">'+mon.rarity.stars+'&#9733;</span></div>'+
+        '<div class="mon-meta">'+mon.code+' &middot; '+mon.rarity.label+'</div>'+
+        '<div style="margin-top:6px;">'+mon.types.map(function(t){return '<span class="type-chip">'+t+'</span>';}).join('')+'</div>'+
+      '</div>'+
+      '<button class="remove-btn" title="Remove" data-key="'+key+'">&times;</button>';
+    card.appendChild(head);
+
+    var tabs = document.createElement('div');
+    tabs.className = "tabs";
+    [["info","Info"],["stats","Stats"],["moves","Moves"]].forEach(function(pair){
+      var b = document.createElement('button');
+      b.className = "tab-btn" + (tab===pair[0]?" active":"");
+      b.textContent = pair[1];
+      b.dataset.key = key; b.dataset.tab = pair[0];
+      tabs.appendChild(b);
+    });
+    card.appendChild(tabs);
+
+    var panel = document.createElement('div');
+    panel.className = "tab-panel";
+    if (tab==="info"){
+      panel.innerHTML =
+        '<div class="info-line"><b>Pokecode:</b> '+mon.code+'</div>'+
+        '<div class="info-line"><b>Rarity:</b> '+mon.rarity.stars+'&#9733; ('+mon.rarity.label+')</div>'+
+        '<div class="info-line"><b>Typing:</b> '+mon.types.join(' / ')+'</div>'+
+        '<div class="info-line"><b>Energy:</b> '+mon.hp+'</div>';
+    } else if (tab==="stats"){
+      var rows = [["hp","Energy / HP",600],["atk","ATK",300],["def","DEF",300],["spd","SPD",300]];
+      panel.innerHTML = rows.map(function(r){
+        var val = mon[r[0]];
+        var pct = Math.min(100, Math.round(val/r[2]*100));
+        return '<div class="stat-row"><span>'+r[1]+'</span>'+
+          '<span class="stat-bar-track"><span class="stat-bar-fill" style="width:'+pct+'%"></span></span>'+
+          '<span style="text-align:right;">'+val+'</span></div>';
+      }).join('');
+    } else if (tab==="moves"){
+      panel.innerHTML = mon.moves.map(function(mv, i){
+        var mvType = mon.types[i % mon.types.length];
+        return '<div class="move-row"><span class="move-name">'+mv+'</span>'+
+          '<span class="move-tag">'+mvType.toUpperCase()+' &middot; IN-BATTLE TYPING</span></div>';
+      }).join('') + '<div style="font-size:11px;color:var(--fg-dim);margin-top:8px;">Chip moveset names only — no power/accuracy is printed on the chip, so battles roll typed hits off this Pokémon\u2019s own typing.</div>';
+    }
+    card.appendChild(panel);
+    rosterEl.appendChild(card);
+  });
+
+  if (roster.length===0){
+    rosterEl.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">Gallery is empty. Enter a Pokecode above to unlock your first chip.</div>';
+  }
+
+  // wire tab buttons
+  rosterEl.querySelectorAll('.tab-btn').forEach(function(b){
+    b.addEventListener('click', function(){
+      activeTab[b.dataset.key] = b.dataset.tab;
+      renderRoster();
+    });
+  });
+  rosterEl.querySelectorAll('.remove-btn').forEach(function(b){
+    b.addEventListener('click', function(){ removeFromRoster(b.dataset.key); });
+  });
+}
+
+// ---------- pickers ----------
+// Each side fields 1 to 3 Pokémon: slot 1 is required, slots 2 and 3 are optional.
+var slotEls = [['t1s1','t1s2','t1s3'],['t2s1','t2s2','t2s3']].map(function(ids){
+  return ids.map(function(id){ return document.getElementById(id); });
+});
+var allSlots = slotEls[0].concat(slotEls[1]);
+var fightBtn = document.getElementById('fightBtn');
+var battleNote = document.getElementById('battleNote');
+function renderPickers(autofill){
+  var vals = [], used = {};
+  allSlots.forEach(function(sel){
+    var v = sel.value;
+    if (!v || roster.indexOf(v)===-1 || used[v]) v = "";
+    if (v) used[v] = true;
+    vals.push(v);
+  });
+  // when the gallery changes, an empty first slot on each team defaults to the first free chip
+  [0,3].forEach(function(i){
+    if (vals[i] || !autofill) return;
+    for (var k=0;k<roster.length;k++){
+      if (!used[roster[k]]){ vals[i] = roster[k]; used[roster[k]] = true; break; }
+    }
+  });
+  allSlots.forEach(function(sel, i){
+    var html = '<option value="">None</option>';
+    roster.forEach(function(key){
+      if (used[key] && vals[i]!==key) return; // a chip can only be on one slot
+      html += '<option value="'+key+'">'+DEX[key].name+' ('+DEX[key].code+')</option>';
+    });
+    sel.innerHTML = html;
+    sel.value = vals[i];
+  });
+  var n1 = vals.slice(0,3).filter(Boolean).length, n2 = vals.slice(3).filter(Boolean).length;
+  fightBtn.disabled = !(n1 && n2);
+  battleNote.textContent = (n1 && n2) ? n1+' vs '+n2+' battle' : (roster.length<2 ? 'Unlock at least two chips to start a battle.' : 'Each team needs at least one Pokémon.');
+}
+allSlots.forEach(function(sel){ sel.addEventListener('change', function(){ renderPickers(false); }); });
+
+// ---------- battle engine ----------
+// no ability/status-move data is printed on these chips, so the sim is pure
+// stat-vs-stat: speed sets turn order, ATK/DEF plus the defender's typing (via
+// the attacker's own rotating typing, since moves carry no listed type) decide damage.
+// Teams fight one active Pokémon at a time; when one faints, the next one is sent out.
+function freshFighter(key, side){
+  var mon = DEX[key];
+  return {
+    key:key, side:side, name:mon.name, types:mon.types, moves:mon.moves.length?mon.moves:["Struggle"],
+    maxHp: mon.hp, hp: mon.hp, atk: mon.atk, def: mon.def, spd: mon.spd, mvIdx:0
+  };
+}
+function takeTurn(attacker, defender, rng, log){
+  var mv = attacker.moves[attacker.mvIdx % attacker.moves.length];
+  var mvType = attacker.types[attacker.mvIdx % attacker.types.length];
+  attacker.mvIdx++;
+  var acc = 92;
+  if (rng()*100 > acc){
+    if (log) log.push({type:"miss", side:attacker.side, text: attacker.name+"’s "+mv+" missed!"});
+    return;
+  }
+  var mult = typeMult(mvType, defender.types);
+  var crit = rng() < 0.0625 ? 1.5 : 1;
+  var variance = 0.85 + rng()*0.15;
+  var dmg = Math.max(1, Math.floor((attacker.atk/defender.def) * 42 * mult * crit * variance));
+  defender.hp = Math.max(0, defender.hp - dmg);
+  if (log){
+    var effText = mult===0?" It had no effect!":mult>1?" It’s super effective!":mult<1?" It’s not very effective.":"";
+    var critText = crit>1?" Critical hit!":"";
+    log.push({type:"hit", side:attacker.side, text: attacker.name+" used "+mv+"!"+critText+effText+" ("+dmg+" dmg)"});
+    if (defender.hp===0) log.push({type:"faint", side:defender.side, text: defender.name+" fainted!"});
+  }
+}
+
+function simulateOnce(keysA, keysB, rng, wantLog){
+  var teams = [
+    keysA.map(function(k){ return freshFighter(k,0); }),
+    keysB.map(function(k){ return freshFighter(k,1); })
+  ];
+  var idx = [0,0], log = [];
+  var multi = keysA.length>1 || keysB.length>1;
+  if (wantLog && multi){
+    log.push({type:"send", side:0, text:"Team 1 leads with "+teams[0][0].name+"."});
+    log.push({type:"send", side:1, text:"Team 2 leads with "+teams[1][0].name+"."});
+  }
+  var turn = 1, maxTurns = 40*Math.max(keysA.length, keysB.length);
+  while (idx[0]<teams[0].length && idx[1]<teams[1].length && turn<=maxTurns){
+    var A = teams[0][idx[0]], B = teams[1][idx[1]];
+    if (wantLog) log.push({type:"turn", text:"Turn "+turn});
+    var order = A.spd===B.spd ? (rng()<0.5?[A,B]:[B,A]) : (A.spd>B.spd?[A,B]:[B,A]);
+    for (var i=0;i<order.length;i++){
+      var attacker = order[i], defender = attacker===A?B:A;
+      if (attacker.hp<=0) continue;
+      takeTurn(attacker, defender, rng, wantLog?log:null);
+      if (defender.hp<=0){
+        idx[defender.side]++;
+        var next = teams[defender.side][idx[defender.side]];
+        if (wantLog && next) log.push({type:"send", side:defender.side, text:"Team "+(defender.side+1)+" sends out "+next.name+"!"});
+        break;
+      }
+    }
+    turn++;
+  }
+  var standing = teams.map(function(t){ return t.filter(function(f){ return f.hp>0; }); });
+  var winner;
+  if (!standing[0].length) winner = 1;
+  else if (!standing[1].length) winner = 0;
+  else {
+    // turn limit reached: more Pokémon standing wins, then more total HP left
+    var hp = standing.map(function(s){ return s.reduce(function(a,f){ return a+f.hp; },0); });
+    winner = standing[0].length!==standing[1].length ? (standing[0].length>standing[1].length?0:1) : (hp[0]>=hp[1]?0:1);
+  }
+  return {winner:winner, survivors:standing[winner].map(function(f){ return f.name; }), log:log};
+}
+
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function runBattle(keysA, keysB, seed){
+  var N = 600;
+  var winsA = 0;
+  var quickRng = mulberry32(seed!==undefined ? seed : Date.now() & 0xffffffff);
+  for (var i=0;i<N;i++){
+    if (simulateOnce(keysA, keysB, quickRng, false).winner===0) winsA++;
+  }
+  var pctA = Math.round(winsA/N*100);
+  var pctB = 100 - pctA;
+
+  var showRng = mulberry32(seed!==undefined ? seed+1 : (Date.now()*7+13) & 0xffffffff);
+  var shown = simulateOnce(keysA, keysB, showRng, true);
+
+  renderResult(keysA, keysB, pctA, pctB, shown);
+}
+
+function teamLabel(keys, side){ return keys.length===1 ? DEX[keys[0]].name : 'Team '+(side+1); }
+
+function renderResult(keysA, keysB, pctA, pctB, shown){
+  var teams = [keysA, keysB];
+  var labels = [teamLabel(keysA,0), teamLabel(keysB,1)];
+  var resultEl = document.getElementById('result');
+  var html = '<div class="odds-row">';
+  html += '<span class="odds-label" title="'+labels[0]+'">'+labels[0]+'</span>';
+  html += '<div class="odds-bar">';
+  if (pctA>0) html += '<div class="odds-seg left" style="width:'+pctA+'%;">'+(pctA>=12?pctA+'%':'')+'</div>';
+  if (pctB>0) html += '<div class="odds-seg right" style="width:'+pctB+'%;">'+(pctB>=12?pctB+'%':'')+'</div>';
+  html += '</div>';
+  html += '<span class="odds-label right" title="'+labels[1]+'">'+labels[1]+'</span>';
+  html += '</div>';
+  if (keysA.length>1 || keysB.length>1){
+    html += '<div class="lineups">'+teams.map(function(keys, s){
+      return '<div class="side-'+s+'"><b>Team '+(s+1)+':</b> '+keys.map(function(k){ return DEX[k].name; }).join(', ')+'</div>';
+    }).join('')+'</div>';
+  }
+  var w = shown.winner;
+  html += '<div class="winner-line">'+labels[w]+' wins this simulated battle.';
+  if (teams[w].length>1) html += ' <span class="survivors">Still standing: '+shown.survivors.join(', ')+'.</span>';
+  html += '</div>';
+  html += '<div class="log">';
+  shown.log.forEach(function(entry){
+    var cls = entry.type==="turn" ? "turn-label" : (entry.type==="faint" ? "faint" : (entry.type==="send" ? "send" : ""));
+    if (entry.side!==undefined) cls += ' side-'+entry.side;
+    html += '<div class="'+cls+'">'+entry.text+'</div>';
+  });
+  html += '</div>';
+  resultEl.innerHTML = html;
+}
+
+fightBtn.addEventListener('click', function(){
+  var a = slotEls[0].map(function(sel){ return sel.value; }).filter(Boolean);
+  var b = slotEls[1].map(function(sel){ return sel.value; }).filter(Boolean);
+  if (a.length && b.length) runBattle(a, b);
+});
+
+// ---------- face-to-face challenge ----------
+// A challenge code is TRT-<nonce>-<Pokecodes>, e.g. TRT-K7Q2-Z2-02.Z2-05. Both players enter each
+// other's code; the battle seed comes from the two codes (sorted), so both devices get the same result.
+var chMine = document.getElementById('chMine');
+var chOpp = document.getElementById('chOpp');
+var chErr = document.getElementById('chErr');
+function hashStr(str){
+  var h = 2166136261;
+  for (var i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function parseCode(str){
+  var raw = (str||'').toUpperCase().replace(/\s+/g,'');
+  var m = /^TRT-([A-Z0-9]{4})-(.+)$/.exec(raw);
+  if (!m) return null;
+  var codes = m[2].split('.'), keys = [];
+  if (codes.length<1 || codes.length>3) return null;
+  for (var i=0;i<codes.length;i++){
+    var hit = CODE_INDEX[codes[i]];
+    if (!hit || hit.length!==1 || keys.indexOf(hit[0])!==-1) return null;
+    keys.push(hit[0]);
+  }
+  return {raw:raw, keys:keys};
+}
+document.getElementById('chMakeBtn').addEventListener('click', function(){
+  var keys = slotEls[0].map(function(sel){ return sel.value; }).filter(Boolean);
+  if (!keys.length){ chErr.textContent = 'Pick at least one Pokémon for Team 1 first.'; return; }
+  var abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', nonce = '';
+  for (var i=0;i<4;i++) nonce += abc.charAt(Math.floor(Math.random()*abc.length));
+  chMine.value = 'TRT-'+nonce+'-'+keys.map(function(k){ return DEX[k].code; }).join('.');
+  chErr.textContent = '';
+});
+document.getElementById('chCopyBtn').addEventListener('click', function(){
+  if (!chMine.value) return;
+  chMine.select();
+  try { navigator.clipboard.writeText(chMine.value); chErr.textContent = ''; }
+  catch(e){ chErr.textContent = 'Couldn’t copy automatically. Press and hold the code to copy it.'; }
+});
+document.getElementById('chGoBtn').addEventListener('click', function(){
+  var mine = parseCode(chMine.value), theirs = parseCode(chOpp.value);
+  if (!mine){ chErr.textContent = 'Make your own code first.'; return; }
+  if (!theirs){ chErr.textContent = 'That opponent code isn’t valid. It looks like TRT-K7Q2-Z2-02.Z2-05.'; return; }
+  if (mine.raw===theirs.raw){ chErr.textContent = 'That’s your own code. Enter the other player’s code.'; return; }
+  chErr.textContent = '';
+  var first = [mine.raw, theirs.raw].sort()[0]===mine.raw;
+  var seed = hashStr([mine.raw, theirs.raw].sort().join('|'));
+  runBattle(first?mine.keys:theirs.keys, first?theirs.keys:mine.keys, seed);
+  document.getElementById('result').insertAdjacentHTML('afterbegin',
+    '<div class="battle-note" style="margin-bottom:10px;">Challenge battle. You are Team '+(first?1:2)+'. Your opponent’s phone shows this same result.</div>');
+});
+
+// ---------- init: gallery starts EMPTY every load ----------
+renderRoster();
+renderPickers();
+
+})();
+</script>
